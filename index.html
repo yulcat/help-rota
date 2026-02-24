@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#1a1a2e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>도움반</title>
+<link rel="manifest" href="/manifest.json">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+:root {
+  --bg1: #1a1a2e; --bg2: #16213e;
+  --card-wait: #0f3460; --card-reserved: #533483; --card-done: #1a936f;
+  --accent: #e94560; --text: #eee; --text-dim: #999;
+  --radius: 12px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+html, body { height:100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+body {
+  background: linear-gradient(135deg, var(--bg1), var(--bg2));
+  color: var(--text);
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+  -webkit-tap-highlight-color: transparent;
+}
+button { font-family: inherit; cursor: pointer; border: none; outline: none; }
+input, select, textarea { font-family: inherit; outline: none; }
+
+/* Name modal */
+.modal-overlay {
+  position: fixed; inset:0; background: rgba(0,0,0,.7);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000; padding: 20px;
+}
+.modal-overlay.hidden { display: none; }
+.modal {
+  background: var(--bg2); border-radius: var(--radius); padding: 28px;
+  width: 100%; max-width: 360px; text-align: center;
+}
+.modal h2 { margin-bottom: 8px; font-size: 1.3em; }
+.modal p { color: var(--text-dim); margin-bottom: 20px; font-size: .9em; }
+.modal input {
+  width: 100%; padding: 14px; border-radius: 8px; border: 1px solid #333;
+  background: var(--bg1); color: var(--text); font-size: 1em; margin-bottom: 12px;
+  text-align: center;
+}
+.modal .btn-primary {
+  width: 100%; padding: 14px; border-radius: 8px;
+  background: var(--accent); color: #fff; font-size: 1em; font-weight: 600;
+}
+.modal .btn-primary:disabled { opacity: .4; }
+.pin-dots { display: flex; gap: 8px; justify-content: center; margin-bottom: 16px; }
+.pin-dot {
+  width: 48px; height: 56px; border-radius: 8px; border: 2px solid #444;
+  background: var(--bg1); color: var(--text); font-size: 1.4em;
+  text-align: center; letter-spacing: 0;
+}
+
+/* Header */
+.header {
+  padding: 16px 16px 0; display: flex; align-items: center; justify-content: space-between;
+}
+.header h1 { font-size: 1.3em; }
+.header-right { display: flex; gap: 8px; align-items: center; }
+.header-btn {
+  background: rgba(255,255,255,.1); color: var(--text); border-radius: 8px;
+  padding: 8px 12px; font-size: .85em;
+}
+
+/* Tabs */
+.tabs {
+  display: flex; padding: 12px 16px 0; gap: 4px;
+}
+.tab {
+  flex: 1; padding: 12px 8px; text-align: center; border-radius: 10px 10px 0 0;
+  background: rgba(255,255,255,.05); color: var(--text-dim); font-size: .85em;
+  font-weight: 500; transition: all .2s;
+}
+.tab.active { background: rgba(255,255,255,.12); color: var(--text); }
+
+/* Content */
+.content {
+  flex: 1; overflow-y: auto; padding: 12px 16px;
+  padding-bottom: calc(80px + var(--safe-bottom));
+  -webkit-overflow-scrolling: touch;
+}
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* Task cards */
+.task-card {
+  border-radius: var(--radius); padding: 16px; margin-bottom: 10px;
+  position: relative; transition: all .2s;
+}
+.task-card.waiting { background: var(--card-wait); }
+.task-card.reserved { background: var(--card-reserved); }
+.task-card.done { background: var(--card-done); opacity: .75; }
+.task-cat { font-size: .8em; color: rgba(255,255,255,.7); margin-bottom: 4px; }
+.task-title { font-size: 1.05em; font-weight: 600; margin-bottom: 4px; }
+.task-desc { font-size: .85em; color: rgba(255,255,255,.7); margin-bottom: 8px; }
+.task-meta { font-size: .75em; color: rgba(255,255,255,.5); display: flex; gap: 10px; flex-wrap: wrap; }
+.task-twin { display: inline-block; background: rgba(255,255,255,.15); border-radius: 4px; padding: 1px 6px; font-size: .75em; margin-left: 6px; }
+.task-actions { display: flex; gap: 8px; margin-top: 10px; }
+.task-actions button {
+  flex: 1; padding: 10px; border-radius: 8px; font-size: .85em; font-weight: 600;
+  min-height: 44px;
+}
+.btn-claim { background: var(--accent); color: #fff; }
+.btn-unclaim { background: rgba(255,255,255,.15); color: var(--text); }
+.btn-complete { background: var(--card-done); color: #fff; }
+.btn-delete { background: rgba(255,0,0,.25); color: #f88; }
+.task-status-badge {
+  position: absolute; top: 12px; right: 12px;
+  font-size: .7em; padding: 3px 8px; border-radius: 4px;
+  background: rgba(0,0,0,.3); color: rgba(255,255,255,.7);
+}
+
+/* Filters */
+.filters { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+.filter-btn {
+  padding: 6px 12px; border-radius: 20px; font-size: .8em;
+  background: rgba(255,255,255,.08); color: var(--text-dim);
+}
+.filter-btn.active { background: var(--accent); color: #fff; }
+
+/* Visit slots */
+.week-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.week-nav button {
+  background: rgba(255,255,255,.1); color: var(--text); border-radius: 8px;
+  padding: 8px 14px; font-size: .9em; min-height: 44px;
+}
+.week-nav span { font-size: .95em; font-weight: 500; }
+.day-column { margin-bottom: 14px; }
+.day-label { font-size: .9em; font-weight: 600; margin-bottom: 6px; color: rgba(255,255,255,.8); }
+.day-label .today-badge { background: var(--accent); color: #fff; font-size: .7em; padding: 2px 6px; border-radius: 4px; margin-left: 6px; }
+.slot {
+  background: rgba(255,255,255,.08); border-radius: 8px; padding: 12px 14px;
+  margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;
+  min-height: 48px;
+}
+.slot.booked { background: var(--card-reserved); }
+.slot-time { font-size: .9em; }
+.slot-who { font-size: .8em; color: rgba(255,255,255,.7); }
+.slot button {
+  padding: 8px 14px; border-radius: 6px; font-size: .8em; font-weight: 600;
+  min-height: 36px;
+}
+.slot .btn-book { background: var(--accent); color: #fff; }
+.slot .btn-unbook { background: rgba(255,255,255,.15); color: var(--text); }
+.slot .btn-del-slot { background: rgba(255,0,0,.2); color: #f88; margin-left: 6px; }
+.no-slots { text-align: center; color: var(--text-dim); padding: 40px 0; font-size: .9em; }
+
+/* Thank log */
+.log-item {
+  background: rgba(255,255,255,.06); border-radius: var(--radius); padding: 14px;
+  margin-bottom: 8px; border-left: 3px solid var(--card-done);
+}
+.log-who { font-weight: 600; font-size: .95em; }
+.log-what { font-size: .85em; color: rgba(255,255,255,.7); margin-top: 2px; }
+.log-when { font-size: .75em; color: rgba(255,255,255,.4); margin-top: 4px; }
+.no-logs { text-align: center; color: var(--text-dim); padding: 40px 0; font-size: .9em; }
+
+/* FAB */
+.fab {
+  position: fixed; bottom: calc(20px + var(--safe-bottom)); right: 20px;
+  width: 56px; height: 56px; border-radius: 50%;
+  background: var(--accent); color: #fff; font-size: 1.8em;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 20px rgba(233,69,96,.4); z-index: 100;
+}
+.fab.hidden { display: none; }
+
+/* Bottom bar */
+.bottombar {
+  position: fixed; bottom:0; left:0; right:0;
+  padding: 8px 16px calc(8px + var(--safe-bottom));
+  background: rgba(22,33,62,.95); backdrop-filter: blur(10px);
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: .8em; color: var(--text-dim); z-index: 50;
+  border-top: 1px solid rgba(255,255,255,.06);
+}
+.bottombar .my-name { font-weight: 600; color: var(--text); }
+.mode-badge {
+  background: rgba(255,255,255,.1); padding: 3px 8px; border-radius: 4px;
+  font-size: .85em;
+}
+.mode-badge.parent { background: rgba(233,69,96,.3); color: #f99; }
+
+/* Form elements for modals */
+.form-group { margin-bottom: 14px; text-align: left; }
+.form-group label { display: block; font-size: .85em; color: var(--text-dim); margin-bottom: 4px; }
+.form-group input, .form-group select, .form-group textarea {
+  width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #333;
+  background: var(--bg1); color: var(--text); font-size: .95em;
+}
+.form-group textarea { resize: vertical; min-height: 60px; }
+.form-row { display: flex; gap: 10px; }
+.form-row .form-group { flex: 1; }
+
+/* Empty state */
+.empty-state { text-align: center; color: var(--text-dim); padding: 60px 20px; }
+.empty-state .emoji { font-size: 2.5em; margin-bottom: 12px; }
+.empty-state p { font-size: .9em; line-height: 1.5; }
+
+/* Animations */
+@keyframes fadeIn { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform: translateY(0); } }
+.task-card, .slot, .log-item { animation: fadeIn .25s ease; }
+
+/* Share button */
+.share-link { word-break: break-all; background: var(--bg1); padding: 10px; border-radius: 6px; font-size: .8em; margin: 10px 0; }
+</style>
+</head>
+<body>
+
+<!-- Name Entry Modal -->
+<div class="modal-overlay" id="nameModal">
+  <div class="modal">
+    <h2>도움반에 오신 걸 환영해요</h2>
+    <p>이름을 알려주세요</p>
+    <input type="text" id="nameInput" placeholder="이름" maxlength="20" autocomplete="off">
+    <button class="btn-primary" id="nameSubmit" disabled>시작하기</button>
+  </div>
+</div>
+
+<!-- PIN Modal -->
+<div class="modal-overlay hidden" id="pinModal">
+  <div class="modal">
+    <h2>부모 모드 PIN</h2>
+    <p>4자리 숫자를 입력하세요</p>
+    <div class="pin-dots">
+      <input class="pin-dot" type="tel" maxlength="1" inputmode="numeric" pattern="[0-9]">
+      <input class="pin-dot" type="tel" maxlength="1" inputmode="numeric" pattern="[0-9]">
+      <input class="pin-dot" type="tel" maxlength="1" inputmode="numeric" pattern="[0-9]">
+      <input class="pin-dot" type="tel" maxlength="1" inputmode="numeric" pattern="[0-9]">
+    </div>
+    <p id="pinError" style="color:#e94560;font-size:.85em;display:none">PIN이 틀렸어요</p>
+    <button class="btn-primary" id="pinSubmit">확인</button>
+    <p style="margin-top:12px;font-size:.8em;color:var(--text-dim);cursor:pointer" id="pinCancel">취소</p>
+  </div>
+</div>
+
+<!-- New Task Modal -->
+<div class="modal-overlay hidden" id="taskModal">
+  <div class="modal" style="text-align:left">
+    <h2 style="text-align:center;margin-bottom:16px">도움 요청 만들기</h2>
+    <div class="form-group">
+      <label>제목</label>
+      <input type="text" id="taskTitle" placeholder="예: 저녁 반찬 하나만..." maxlength="60">
+    </div>
+    <div class="form-group">
+      <label>설명 (선택)</label>
+      <textarea id="taskDesc" placeholder="자세한 내용"></textarea>
+    </div>
+    <div class="form-group">
+      <label>카테고리</label>
+      <select id="taskCat">
+        <option value="🍳 음식">🍳 음식</option>
+        <option value="🧺 빨래">🧺 빨래</option>
+        <option value="🛒 장보기">🛒 장보기</option>
+        <option value="👶 아기 돌봄">👶 아기 돌봄</option>
+        <option value="🏠 집안일">🏠 집안일</option>
+        <option value="📦 기타" selected>📦 기타</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>희망 날짜</label>
+        <input type="date" id="taskDate">
+      </div>
+      <div class="form-group">
+        <label>희망 시간</label>
+        <input type="time" id="taskTime">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>아기 태그</label>
+      <select id="taskTwin">
+        <option value="">해당 없음</option>
+        <option value="아둥이">아둥이</option>
+        <option value="바둥이">바둥이</option>
+        <option value="둘 다">둘 다</option>
+      </select>
+    </div>
+    <button class="btn-primary" id="taskSubmit" style="margin-top:4px">요청 등록</button>
+    <p style="text-align:center;margin-top:12px;font-size:.8em;color:var(--text-dim);cursor:pointer" id="taskCancel">취소</p>
+  </div>
+</div>
+
+<!-- New Visit Slot Modal -->
+<div class="modal-overlay hidden" id="visitModal">
+  <div class="modal" style="text-align:left">
+    <h2 style="text-align:center;margin-bottom:16px">방문 시간 열기</h2>
+    <div class="form-group">
+      <label>날짜</label>
+      <input type="date" id="visitDate">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>시작 시간</label>
+        <input type="time" id="visitStart" value="10:00">
+      </div>
+      <div class="form-group">
+        <label>끝 시간</label>
+        <input type="time" id="visitEnd" value="12:00">
+      </div>
+    </div>
+    <button class="btn-primary" id="visitSubmit" style="margin-top:4px">슬롯 열기</button>
+    <p style="text-align:center;margin-top:12px;font-size:.8em;color:var(--text-dim);cursor:pointer" id="visitCancel">취소</p>
+  </div>
+</div>
+
+<!-- Share Modal -->
+<div class="modal-overlay hidden" id="shareModal">
+  <div class="modal">
+    <h2>초대 링크</h2>
+    <p>이 링크를 가족/친구에게 보내세요</p>
+    <div class="share-link" id="shareLink"></div>
+    <button class="btn-primary" id="shareCopy">링크 복사</button>
+    <p style="margin-top:12px;font-size:.8em;color:var(--text-dim);cursor:pointer" id="shareClose">닫기</p>
+  </div>
+</div>
+
+<!-- Header -->
+<div class="header">
+  <h1>도움반</h1>
+  <div class="header-right">
+    <button class="header-btn" id="shareBtn">공유</button>
+    <button class="header-btn" id="modeBtn">도우미</button>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <button class="tab active" data-tab="tasks">도움 요청</button>
+  <button class="tab" data-tab="visits">방문 일정</button>
+  <button class="tab" data-tab="log">감사 로그</button>
+</div>
+
+<!-- Content -->
+<div class="content">
+  <!-- Tasks Panel -->
+  <div class="tab-panel active" id="panel-tasks">
+    <div class="filters" id="taskFilters">
+      <button class="filter-btn active" data-filter="all">전체</button>
+      <button class="filter-btn" data-filter="waiting">대기중</button>
+      <button class="filter-btn" data-filter="reserved">예약됨</button>
+      <button class="filter-btn" data-filter="done">완료</button>
+    </div>
+    <div id="taskList"></div>
+  </div>
+
+  <!-- Visits Panel -->
+  <div class="tab-panel" id="panel-visits">
+    <div class="week-nav">
+      <button id="prevWeek">◀</button>
+      <span id="weekLabel"></span>
+      <button id="nextWeek">▶</button>
+    </div>
+    <div id="visitList"></div>
+  </div>
+
+  <!-- Log Panel -->
+  <div class="tab-panel" id="panel-log">
+    <div id="logList"></div>
+  </div>
+</div>
+
+<!-- FAB -->
+<button class="fab" id="fab">+</button>
+
+<!-- Bottom bar -->
+<div class="bottombar">
+  <div><span class="my-name" id="myNameDisplay"></span></div>
+  <div>
+    <span class="mode-badge" id="modeBadge">도우미</span>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+(() => {
+  const socket = io();
+
+  // --- State ---
+  let myName = localStorage.getItem('helprota_name') || '';
+  let isParent = localStorage.getItem('helprota_parent') === 'true';
+  let tasks = [];
+  let visits = [];
+  let currentFilter = 'all';
+  let currentTab = 'tasks';
+  let weekOffset = 0;
+
+  // --- Elements ---
+  const $ = id => document.getElementById(id);
+  const nameModal = $('nameModal'), nameInput = $('nameInput'), nameSubmit = $('nameSubmit');
+  const pinModal = $('pinModal'), pinSubmit = $('pinSubmit'), pinCancel = $('pinCancel'), pinError = $('pinError');
+  const taskModal = $('taskModal'), taskSubmit = $('taskSubmit'), taskCancel = $('taskCancel');
+  const visitModal = $('visitModal'), visitSubmit = $('visitSubmit'), visitCancel = $('visitCancel');
+  const shareModal = $('shareModal'), shareLink = $('shareLink'), shareCopy = $('shareCopy'), shareClose = $('shareClose');
+  const taskList = $('taskList'), visitList = $('visitList'), logList = $('logList');
+  const fab = $('fab'), modeBtn = $('modeBtn'), modeBadge = $('modeBadge');
+  const myNameDisplay = $('myNameDisplay');
+  const weekLabel = $('weekLabel');
+  const pinDots = document.querySelectorAll('.pin-dot');
+
+  // --- Init ---
+  if (myName) {
+    nameModal.classList.add('hidden');
+    registerHelper(myName);
+  }
+  updateMode();
+
+  // --- Name modal ---
+  nameInput.addEventListener('input', () => {
+    nameSubmit.disabled = !nameInput.value.trim();
+  });
+  nameSubmit.addEventListener('click', () => {
+    const name = nameInput.value.trim();
+    if (!name) return;
+    myName = name;
+    localStorage.setItem('helprota_name', myName);
+    nameModal.classList.add('hidden');
+    registerHelper(myName);
+    updateMode();
+  });
+  nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') nameSubmit.click(); });
+
+  function registerHelper(name) {
+    fetch('/api/helpers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+  }
+
+  // --- PIN modal ---
+  pinDots.forEach((dot, i) => {
+    dot.addEventListener('input', () => {
+      dot.value = dot.value.replace(/\D/g, '').slice(0, 1);
+      if (dot.value && i < 3) pinDots[i + 1].focus();
+    });
+    dot.addEventListener('keydown', e => {
+      if (e.key === 'Backspace' && !dot.value && i > 0) pinDots[i - 1].focus();
+    });
+  });
+  pinSubmit.addEventListener('click', async () => {
+    const pin = Array.from(pinDots).map(d => d.value).join('');
+    if (pin.length < 4) return;
+    const res = await fetch('/api/verify-pin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin }) });
+    const data = await res.json();
+    if (data.ok) {
+      isParent = true;
+      localStorage.setItem('helprota_parent', 'true');
+      pinModal.classList.add('hidden');
+      updateMode();
+    } else {
+      pinError.style.display = 'block';
+      pinDots.forEach(d => { d.value = ''; });
+      pinDots[0].focus();
+    }
+  });
+  pinCancel.addEventListener('click', () => pinModal.classList.add('hidden'));
+
+  // --- Mode toggle ---
+  modeBtn.addEventListener('click', () => {
+    if (isParent) {
+      isParent = false;
+      localStorage.setItem('helprota_parent', 'false');
+      updateMode();
+    } else {
+      pinError.style.display = 'none';
+      pinDots.forEach(d => { d.value = ''; });
+      pinModal.classList.remove('hidden');
+      pinDots[0].focus();
+    }
+  });
+
+  function updateMode() {
+    myNameDisplay.textContent = myName || '';
+    if (isParent) {
+      modeBtn.textContent = '도우미로';
+      modeBadge.textContent = '부모';
+      modeBadge.className = 'mode-badge parent';
+    } else {
+      modeBtn.textContent = '부모 모드';
+      modeBadge.textContent = '도우미';
+      modeBadge.className = 'mode-badge';
+    }
+    renderTasks();
+    renderVisits();
+  }
+
+  // --- Tabs ---
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      const panel = $('panel-' + tab.dataset.tab);
+      panel.classList.add('active');
+      currentTab = tab.dataset.tab;
+      updateFab();
+    });
+  });
+
+  function updateFab() {
+    if ((currentTab === 'tasks' || currentTab === 'visits') && isParent) {
+      fab.classList.remove('hidden');
+    } else {
+      fab.classList.add('hidden');
+    }
+  }
+
+  // --- Filters ---
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentFilter = btn.dataset.filter;
+      renderTasks();
+    });
+  });
+
+  // --- FAB ---
+  fab.addEventListener('click', () => {
+    if (currentTab === 'tasks') {
+      $('taskTitle').value = '';
+      $('taskDesc').value = '';
+      $('taskCat').value = '📦 기타';
+      $('taskDate').value = '';
+      $('taskTime').value = '';
+      $('taskTwin').value = '';
+      taskModal.classList.remove('hidden');
+    } else if (currentTab === 'visits') {
+      const today = new Date().toISOString().split('T')[0];
+      $('visitDate').value = today;
+      $('visitStart').value = '10:00';
+      $('visitEnd').value = '12:00';
+      visitModal.classList.remove('hidden');
+    }
+  });
+
+  // --- Task CRUD ---
+  taskSubmit.addEventListener('click', async () => {
+    const title = $('taskTitle').value.trim();
+    if (!title) return;
+    await fetch('/api/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title,
+        description: $('taskDesc').value.trim(),
+        category: $('taskCat').value,
+        desiredDate: $('taskDate').value,
+        desiredTime: $('taskTime').value,
+        twin: $('taskTwin').value,
+      })
+    });
+    taskModal.classList.add('hidden');
+  });
+  taskCancel.addEventListener('click', () => taskModal.classList.add('hidden'));
+
+  // --- Visit CRUD ---
+  visitSubmit.addEventListener('click', async () => {
+    const date = $('visitDate').value;
+    const startTime = $('visitStart').value;
+    const endTime = $('visitEnd').value;
+    if (!date || !startTime || !endTime) return;
+    await fetch('/api/visits', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date, startTime, endTime })
+    });
+    visitModal.classList.add('hidden');
+  });
+  visitCancel.addEventListener('click', () => visitModal.classList.add('hidden'));
+
+  // --- Share ---
+  $('shareBtn').addEventListener('click', () => {
+    shareLink.textContent = location.href;
+    shareModal.classList.remove('hidden');
+  });
+  shareCopy.addEventListener('click', () => {
+    if (navigator.share) {
+      navigator.share({ title: '도움반', text: '우리 가정에 도움의 손길을!', url: location.href });
+    } else {
+      navigator.clipboard.writeText(location.href).then(() => {
+        shareCopy.textContent = '복사됨!';
+        setTimeout(() => { shareCopy.textContent = '링크 복사'; }, 1500);
+      });
+    }
+  });
+  shareClose.addEventListener('click', () => shareModal.classList.add('hidden'));
+
+  // --- Socket events ---
+  socket.on('tasks:update', data => { tasks = data; renderTasks(); renderLog(); });
+  socket.on('visits:update', data => { visits = data; renderVisits(); });
+
+  // --- Render Tasks ---
+  function renderTasks() {
+    let filtered = tasks;
+    if (currentFilter !== 'all') filtered = tasks.filter(t => t.status === currentFilter);
+
+    if (filtered.length === 0) {
+      taskList.innerHTML = `<div class="empty-state"><div class="emoji">${currentFilter === 'all' ? '📋' : '🔍'}</div><p>${currentFilter === 'all' ? '아직 도움 요청이 없어요' : '해당하는 요청이 없어요'}</p></div>`;
+      updateFab();
+      return;
+    }
+
+    taskList.innerHTML = filtered.map(t => {
+      const statusLabel = { waiting: '대기중', reserved: '예약됨', done: '완료' }[t.status];
+      const twinTag = t.twin ? `<span class="task-twin">${t.twin}</span>` : '';
+      let dateStr = '';
+      if (t.desiredDate) dateStr = formatDate(t.desiredDate);
+      if (t.desiredTime) dateStr += ' ' + t.desiredTime;
+
+      let actions = '';
+      if (t.status === 'waiting') {
+        if (!isParent) {
+          actions = `<button class="btn-claim" onclick="claimTask('${t.id}')">내가 할게!</button>`;
+        } else {
+          actions = `<button class="btn-delete" onclick="deleteTask('${t.id}')">삭제</button>`;
+        }
+      } else if (t.status === 'reserved') {
+        if (isParent) {
+          actions = `<button class="btn-complete" onclick="completeTask('${t.id}')">완료</button>
+                     <button class="btn-unclaim" onclick="unclaimTask('${t.id}')">취소</button>`;
+        } else if (t.claimedBy === myName) {
+          actions = `<button class="btn-unclaim" onclick="unclaimTask('${t.id}')">포기</button>`;
+        }
+      }
+
+      return `<div class="task-card ${t.status}">
+        <span class="task-status-badge">${statusLabel}</span>
+        <div class="task-cat">${t.category}${twinTag}</div>
+        <div class="task-title">${esc(t.title)}</div>
+        ${t.description ? `<div class="task-desc">${esc(t.description)}</div>` : ''}
+        <div class="task-meta">
+          ${dateStr ? `<span>📅 ${dateStr}</span>` : ''}
+          ${t.claimedBy ? `<span>🙋 ${esc(t.claimedBy)}</span>` : ''}
+        </div>
+        ${actions ? `<div class="task-actions">${actions}</div>` : ''}
+      </div>`;
+    }).join('');
+    updateFab();
+  }
+
+  // --- Render Visits ---
+  function renderVisits() {
+    const monday = getMonday(weekOffset);
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday);
+      d.setDate(d.getDate() + i);
+      days.push(d);
+    }
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    weekLabel.textContent = formatDate(days[0].toISOString().split('T')[0]) + ' ~ ' + formatDate(days[6].toISOString().split('T')[0]);
+
+    const dayNames = ['월', '화', '수', '목', '금', '토', '일'];
+
+    let html = '';
+    days.forEach((day, i) => {
+      const dateStr = day.toISOString().split('T')[0];
+      const isToday = dateStr === todayStr;
+      const dayVisits = visits.filter(v => v.date === dateStr).sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+      if (dayVisits.length === 0 && !isParent) return;
+
+      html += `<div class="day-column">
+        <div class="day-label">${dayNames[i]} (${formatDateShort(dateStr)})${isToday ? '<span class="today-badge">오늘</span>' : ''}</div>`;
+
+      if (dayVisits.length === 0) {
+        html += `<div class="slot" style="color:var(--text-dim);font-size:.85em">열린 시간이 없어요</div>`;
+      } else {
+        dayVisits.forEach(v => {
+          let btns = '';
+          if (v.bookedBy) {
+            if (isParent || v.bookedBy === myName) {
+              btns = `<button class="btn-unbook" onclick="unbookVisit('${v.id}')">취소</button>`;
+            }
+            if (isParent) btns += `<button class="btn-del-slot" onclick="deleteVisit('${v.id}')">삭제</button>`;
+          } else {
+            if (!isParent) {
+              btns = `<button class="btn-book" onclick="bookVisit('${v.id}')">방문할게요!</button>`;
+            }
+            if (isParent) btns = `<button class="btn-del-slot" onclick="deleteVisit('${v.id}')">삭제</button>`;
+          }
+          html += `<div class="slot ${v.bookedBy ? 'booked' : ''}">
+            <div>
+              <div class="slot-time">${v.startTime} ~ ${v.endTime}</div>
+              ${v.bookedBy ? `<div class="slot-who">🙋 ${esc(v.bookedBy)}</div>` : '<div class="slot-who" style="color:rgba(255,255,255,.4)">비어있음</div>'}
+            </div>
+            <div style="display:flex">${btns}</div>
+          </div>`;
+        });
+      }
+      html += '</div>';
+    });
+
+    if (!html) {
+      html = `<div class="no-slots">이번 주에 열린 방문 시간이 없어요</div>`;
+    }
+    visitList.innerHTML = html;
+    updateFab();
+  }
+
+  // --- Render Log ---
+  function renderLog() {
+    const done = tasks.filter(t => t.status === 'done').sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || ''));
+    if (done.length === 0) {
+      logList.innerHTML = '<div class="no-logs"><div class="empty-state"><div class="emoji">💝</div><p>아직 완료된 도움이 없어요<br>감사한 마음이 여기에 쌓여요</p></div></div>';
+      return;
+    }
+    logList.innerHTML = done.map(t => {
+      return `<div class="log-item">
+        <div class="log-who">🙏 ${esc(t.claimedBy || '알 수 없음')}</div>
+        <div class="log-what">${esc(t.category)} — ${esc(t.title)}</div>
+        <div class="log-when">${t.completedAt ? formatDateTime(t.completedAt) : ''}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // --- Week navigation ---
+  $('prevWeek').addEventListener('click', () => { weekOffset--; renderVisits(); });
+  $('nextWeek').addEventListener('click', () => { weekOffset++; renderVisits(); });
+
+  // --- API actions (global) ---
+  window.claimTask = async (id) => {
+    await fetch(`/api/tasks/${id}/claim`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ helperName: myName }) });
+  };
+  window.unclaimTask = async (id) => {
+    await fetch(`/api/tasks/${id}/unclaim`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+  };
+  window.completeTask = async (id) => {
+    await fetch(`/api/tasks/${id}/complete`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+  };
+  window.deleteTask = async (id) => {
+    if (!confirm('이 요청을 삭제할까요?')) return;
+    await fetch(`/api/tasks/${id}`, { method: 'DELETE' });
+  };
+  window.bookVisit = async (id) => {
+    await fetch(`/api/visits/${id}/book`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ helperName: myName }) });
+  };
+  window.unbookVisit = async (id) => {
+    await fetch(`/api/visits/${id}/unbook`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+  };
+  window.deleteVisit = async (id) => {
+    if (!confirm('이 슬롯을 삭제할까요?')) return;
+    await fetch(`/api/visits/${id}`, { method: 'DELETE' });
+  };
+
+  // --- Helpers ---
+  function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  function getMonday(offset) {
+    const d = new Date();
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1) + (offset * 7);
+    const monday = new Date(d.setDate(diff));
+    monday.setHours(0, 0, 0, 0);
+    return monday;
+  }
+
+  function formatDate(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+  }
+
+  function formatDateShort(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+  }
+
+  function formatDateTime(isoStr) {
+    const d = new Date(isoStr);
+    return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  }
+
+  // Close modals on overlay click
+  [taskModal, visitModal, shareModal, pinModal].forEach(modal => {
+    modal.addEventListener('click', e => {
+      if (e.target === modal) modal.classList.add('hidden');
+    });
+  });
+
+  // Service worker registration
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>
